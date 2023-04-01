@@ -7,6 +7,8 @@ from typing import Tuple, Any
 class Database:
     def __init__(self, cache_file: str = "cache.sqlite3") -> None:
         self.cache_file: str = cache_file
+        with SqliteDict(self.cache_file) as dict:
+            dict.clear()
 
     def save(self, key, value) -> Any:
         try:
