@@ -29,6 +29,18 @@ class KeyLibrary:
         vk: VerifyingKey = sk.verifying_key
         return (sk, vk)
 
+    @staticmethod
+    def save_signing_key(path: str, key: SigningKey) -> None:
+        b: bytes = key.to_pem()
+        with open(path, "wb") as file:
+            file.write(b)
+
+    @staticmethod
+    def load_signing_key(path: str) -> SigningKey:
+        with open(path, "rb") as file:
+            b: bytes = file.read()
+        return SigningKey.from_pem(b)
+
     def add_key(self, location: str, key: VerifyingKey) -> None:
         self.map[location] = key
 
