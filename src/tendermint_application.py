@@ -102,7 +102,7 @@ class WasteTracker(BaseApplication):
         if split[0] == "HISTORY":
             device_id: int = int(split[1])
 
-            if device_id > self.num_items:
+            if device_id >= self.num_items:
                 return ResponseQuery(code=ErrorCode, log="device-id not assigned")
 
             exists, history = self.db.load(device_id)

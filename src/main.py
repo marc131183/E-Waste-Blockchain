@@ -1,22 +1,19 @@
 from digital_signatures import KeyLibrary
-from transactions import create_transaction_string
+from transactions import (
+    allocate_device_id,
+    send_device_location,
+    query_device_information,
+)
 
 from datetime import datetime
 
+
 if __name__ == "__main__":
-    device_id = 0
-    locations = ["Oslo", "Bergen"]
+    result, id = allocate_device_id()
+    print(result, id)
 
-    keylib = KeyLibrary()
+    sk = KeyLibrary.load_signing_key("priv_key.pem")
 
-    for location in locations:
-        sk, vk = KeyLibrary.create_keypair()
-        keylib.add_key(location, vk)
+    print(send_device_location(id, "loc", sk))
 
-        print(create_transaction_string(device_id, location, datetime.now(), sk))
-
-    keylib.save("lib.txt")
-
-    # signature = sk.sign(bytes.fromhex(hash))
-    # signature = signature.hex()
-    # print(vk.verify(bytes.fromhex(signature), bytes.fromhex(hash)))
+    print(query_device_information(id))
