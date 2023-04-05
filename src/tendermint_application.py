@@ -35,8 +35,6 @@ class WasteTracker(BaseApplication):
     def check_tx(self, tx: bytes) -> ResponseCheckTx:
         split = tx.decode(BYTE_ENCODING).split("=")
 
-        print("checking...")
-
         if split[0] == "BLOCK":
             device_id, location, timestamp, signature = (
                 int(split[1]),
@@ -63,8 +61,6 @@ class WasteTracker(BaseApplication):
 
     def deliver_tx(self, tx: bytes) -> ResponseDeliverTx:
         split = tx.decode(BYTE_ENCODING).split("=")
-
-        print("delivering...")
 
         if split[0] == "BLOCK":
             device_id: int = int(split[1])
@@ -96,8 +92,6 @@ class WasteTracker(BaseApplication):
 
     def query(self, req: RequestQuery) -> ResponseQuery:
         split = req.data.decode(BYTE_ENCODING).split("=")
-
-        print("querying...")
 
         if split[0] == "HISTORY":
             device_id: int = int(split[1])
@@ -137,11 +131,14 @@ class WasteTracker(BaseApplication):
                 key=bytes(str(device_id), BYTE_ENCODING),
                 value=bytes(value, BYTE_ENCODING),
             )
+        elif split[0] == "NUMBER":
+            return ResponseQuery(
+                code=OkCode, value=bytes(str(self.num_items - 1), BYTE_ENCODING)
+            )
         else:
             return ResponseQuery(code=ErrorCode, log="unsupported query type")
 
     def commit(self) -> ResponseCommit:
-        print("committing...")
         self.db.save("num_devices", self.num_items)
         for key, value in self.uncommited_transactions.items():
             exists, old_value = self.db.load(key)

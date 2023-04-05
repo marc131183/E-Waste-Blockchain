@@ -9,14 +9,16 @@ The following transaction types exist:
         BLOCK:                  identifier that this transaction is of the type BLOCK
         DEVICE-ID:              device id
         LOCATION:               name of the site that the item was received
-        TIMESTAMP:              timestamp with the format YYMMDDHHMMSS
+        TIMESTAMP:              timestamp with the format specified in DATETIME_FORMAT
         SIGNED-DIGEST:          The signed hash of the data
 
     ALLOCATE:
         This transaction type allocates a new device id and has the following format:
-        ALLOCATE=TIMESTAMP
+        ALLOCATE=LOCATION=TIMESTAMP
 
-        It returns the reserved device-id in the deliver_tx method
+        location and timestamp are only required to ensure that no two transactions are the same
+
+        It returns the reserved device-id in the deliver_tx method (under data)
 
 The following query types exist:
 
@@ -26,10 +28,16 @@ The following query types exist:
 
         The data is returned in the following way:
         key                     stores the device-id
-        value                   stores all the locations and timestamps, the timestamp is in the format YYMMDDHHMMSS
+        value                   stores all the locations and timestamps, the timestamp is in the format DATETIME_FORMAT
                                 these attributes are seperated with =, it could look like this:
                                 location1=timestamp1=location2=timestamp2
-        
+
+    NUMBER:
+        This query can be used to retrieve how many device ids are assigned, it has the following format:
+        NUMBER
+
+        The data is returned in the following way:
+        value                   returns the highest device id that is assigned (as such device ids 0..{number returned} are assigned)
 """
 
 
@@ -42,7 +50,7 @@ import json
 import base64
 
 BYTE_ENCODING = "UTF-8"
-DATETIME_FORMAT = "%y%m%d%H%M%S"
+DATETIME_FORMAT = "%y%m%d%H%M%S%f"
 
 
 def compute_hash(device_id: int, location: str, timestamp: datetime) -> bytes:
@@ -53,7 +61,7 @@ def compute_hash(device_id: int, location: str, timestamp: datetime) -> bytes:
     return hasher.digest()
 
 
-def allocate_device_id() -> Tuple[bool, int]:
+def allocate_device_id(location: str) -> Tuple[bool, int]:
     """
     Send a transaction to the Tendermint network to allocate a new device id
 
@@ -62,19 +70,24 @@ def allocate_device_id() -> Tuple[bool, int]:
 
         allocated device id
     """
-    response = requests.get(
-        'http://localhost:26657/broadcast_tx_commit?tx="ALLOCATE={}"'.format(
-            datetime.now().strftime(DATETIME_FORMAT)
+    try:
+        response = requests.get(
+            'http://localhost:26657/broadcast_tx_commit?tx="ALLOCATE={}={}"'.format(
+                location, datetime.now().strftime(DATETIME_FORMAT)
+            )
         )
-    )
-    dict = json.loads(response.content)
-    # check if there was an error, while checking the transaction
-    if dict["result"]["check_tx"]["code"]:
-        return False, -1
+        dict = json.loads(response.content)
+        # check if there was an error, while checking the transaction
+        if dict["result"]["check_tx"]["code"]:
+            return False, -1
 
-    return True, int(
-        base64.b64decode(dict["result"]["deliver_tx"]["data"]).decode(BYTE_ENCODING)
-    )
+        return True, int(
+            base64.b64decode(dict["result"]["deliver_tx"]["data"]).decode(BYTE_ENCODING)
+        )
+    except KeyboardInterrupt:
+        quit()
+    except:
+        return False, -1
 
 
 def send_device_location(
@@ -88,23 +101,60 @@ def send_device_location(
 
         error message in case of failure
     """
-    now: datetime = datetime.now()
-    transaction_string = "BLOCK={}={}={}={}".format(
-        device_id,
-        location,
-        now.strftime(DATETIME_FORMAT),
-        signing_key.sign(compute_hash(device_id, location, now)).hex(),
-    )
-    response = requests.get(
-        'http://localhost:26657/broadcast_tx_commit?tx="{}"'.format(transaction_string)
-    )
-    dict = json.loads(response.content)
+    try:
+        now: datetime = datetime.now()
+        transaction_string = "BLOCK={}={}={}={}".format(
+            device_id,
+            location,
+            now.strftime(DATETIME_FORMAT),
+            signing_key.sign(compute_hash(device_id, location, now)).hex(),
+        )
+        response = requests.get(
+            'http://localhost:26657/broadcast_tx_commit?tx="{}"'.format(
+                transaction_string
+            )
+        )
+        dict = json.loads(response.content)
 
-    # check if there was an error, while checking the transaction
-    if dict["result"]["check_tx"]["code"]:
-        return False, dict["result"]["check_tx"]["log"]
+        # check if there was an error, while checking the transaction
+        if dict["result"]["check_tx"]["code"]:
+            return False, dict["result"]["check_tx"]["log"]
 
-    return True, ""
+        return True, ""
+    except KeyboardInterrupt:
+        quit()
+    except:
+        return (
+            False,
+            "unexpected error",
+        )
+
+
+def query_number_of_devices() -> Tuple[bool, str, int]:
+    """
+    Queries the Tendermint network how many device ids are assigned
+
+    returns:
+        result (indicating success/failure)
+
+        log about the result (empty if no error occured)
+
+        highest device id that is assigned (as such 0..{returned device id} are assigned)
+    """
+    try:
+        response = requests.get('http://localhost:26657/abci_query?data="NUMBER"')
+        dict = json.loads(response.content)
+        message = dict["result"]["response"]
+
+        # check if there was an error
+        if message["code"]:
+            return False, message["log"], -1
+
+        return True, "", int(base64.b64decode(message["value"]).decode(BYTE_ENCODING))
+    except KeyboardInterrupt:
+        quit()
+    except:
+        return False, "unexpected error", -1
 
 
 def query_device_information(
@@ -120,24 +170,28 @@ def query_device_information(
 
         List of Tuples that store the locations + timestamps that the device was at in order
     """
-    response = requests.get(
-        'http://localhost:26657/abci_query?data="HISTORY={}"'.format(device_id)
-    )
-    dict = json.loads(response.content)
-    message = dict["result"]["response"]
-    print(message)
+    try:
+        response = requests.get(
+            'http://localhost:26657/abci_query?data="HISTORY={}"'.format(device_id)
+        )
+        dict = json.loads(response.content)
+        message = dict["result"]["response"]
 
-    # check if there was an error
-    if message["code"]:
-        return False, message["log"], []
+        # check if there was an error
+        if message["code"]:
+            return False, message["log"], []
 
-    device_info = []
-    if message["value"]:
-        data = base64.b64decode(message["value"]).decode(BYTE_ENCODING).split("=")
+        device_info = []
+        if message["value"]:
+            data = base64.b64decode(message["value"]).decode(BYTE_ENCODING).split("=")
 
-        for i in range(0, len(data), 2):
-            device_info.append(
-                (data[i], datetime.strptime(data[i + 1], DATETIME_FORMAT))
-            )
+            for i in range(0, len(data), 2):
+                device_info.append(
+                    (data[i], datetime.strptime(data[i + 1], DATETIME_FORMAT))
+                )
 
-    return True, message["info"], device_info
+        return True, message["info"], device_info
+    except KeyboardInterrupt:
+        quit()
+    except:
+        return False, "unexpected error", []
