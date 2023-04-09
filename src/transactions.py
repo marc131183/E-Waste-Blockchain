@@ -55,7 +55,7 @@ DATETIME_FORMAT = "%y%m%d%H%M%S%f"
 
 def compute_hash(device_id: int, location: str, timestamp: datetime) -> bytes:
     hasher = sha256()
-    hasher.update(bytes(device_id))
+    hasher.update(bytes(str(device_id), BYTE_ENCODING))
     hasher.update(bytes(location, BYTE_ENCODING))
     hasher.update(bytes(timestamp.strftime(DATETIME_FORMAT), BYTE_ENCODING))
     return hasher.digest()
