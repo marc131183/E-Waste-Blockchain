@@ -9,5 +9,6 @@ setup(
         "sqlitedict==2.1.0",
         "ecdsa==0.18.0",
         "grequests==0.6.0",
-    ],
+        "Flask=2.2.3"
+        ],
 )
