@@ -24,11 +24,13 @@ if __name__ == "__main__":
         if random.randint(0, 2):
             now = datetime.now()
             device_id = random.randint(0, max_device_id)
-            transaction_string = "BLOCK={}={}={}={}".format(
+            destruct = False
+            transaction_string = "BLOCK={}={}={}={}={}".format(
                 device_id,
                 my_location,
                 now.strftime(DATETIME_FORMAT),
-                sk.sign(compute_hash(device_id, my_location, now)).hex(),
+                destruct,
+                sk.sign(compute_hash(device_id, my_location, now, destruct)).hex(),
             )
             urls.append(
                 'http://localhost:26657/broadcast_tx_commit?tx="{}"'.format(

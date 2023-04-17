@@ -36,22 +36,43 @@ class WasteTracker(BaseApplication):
         split = tx.decode(BYTE_ENCODING).split("=")
 
         if split[0] == "BLOCK":
-            device_id, location, timestamp, signature = (
-                int(split[1]),
-                split[2],
-                datetime.strptime(split[3], DATETIME_FORMAT),
-                bytes.fromhex(split[4]),
-            )
+            device_id: int = int(split[1])
+            location: str = split[2]
+            timestamp: datetime = datetime.strptime(split[3], DATETIME_FORMAT)
+            destruct: bool = split[4] == "True"
+            signature: bytes = bytes.fromhex(split[5])
 
-            hash: bytes = compute_hash(device_id, location, timestamp)
+            hash: bytes = compute_hash(device_id, location, timestamp, destruct)
 
             # verify that the transaction was created by the location's node and that the content is correct
             if not self.keys.verify(location, hash, signature):
                 return ResponseCheckTx(code=ErrorCode, log="signature incorrect")
 
+            # verify that the location has a destruction certificate, if the item is to ordered to be destroyed there
+            if destruct:
+                if not self.keys.has_destruct_certificate(location):
+                    return ResponseCheckTx(
+                        code=ErrorCode,
+                        log="item is ordered to be destroyed, but location does not have a valid destruction certificate",
+                    )
+
             # verify that the device id is assigned
             if device_id >= self.num_items:
                 return ResponseCheckTx(code=ErrorCode, log="device-id not assigned")
+
+            # verify that the last location of that device is not the same as the one broadcasted and that the item has not been destroyed yet
+            exists, device_info = self.db.load(device_id)
+            if exists and len(device_info):
+                if device_info[-1][0] == location:
+                    return ResponseCheckTx(
+                        code=ErrorCode,
+                        log="last location of device equals the submitted one",
+                    )
+                if device_info[-1][2]:
+                    return ResponseCheckTx(
+                        code=ErrorCode,
+                        log="item has already been destroyed, cannot add entry",
+                    )
 
             return ResponseCheckTx(code=OkCode)
         elif split[0] == "ALLOCATE":
@@ -66,17 +87,19 @@ class WasteTracker(BaseApplication):
             device_id: int = int(split[1])
             location: str = split[2]
             timestamp: datetime = datetime.strptime(split[3], DATETIME_FORMAT)
-            signature: str = split[4]
+            destruct: bool = split[4] == "True"
+            signature: str = split[5]
 
             if device_id in self.uncommited_transactions:
                 self.uncommited_transactions[device_id].append(
-                    (location, timestamp, signature)
+                    (location, timestamp, destruct, signature)
                 )
             else:
                 self.uncommited_transactions[device_id] = [
                     (
                         location,
                         timestamp,
+                        destruct,
                         signature,
                     )
                 ]
@@ -109,14 +132,17 @@ class WasteTracker(BaseApplication):
                 )
 
             value = ""
-            for i, (location, timestamp, signature) in enumerate(history):
+            for i, (location, timestamp, destruct, signature) in enumerate(history):
                 value = (
                     value
                     + "=" * (i != 0)
-                    + "{}={}".format(location, timestamp.strftime(DATETIME_FORMAT))
+                    + "{}={}".format(
+                        location + (" - destroyed" if destruct else ""),
+                        timestamp.strftime(DATETIME_FORMAT),
+                    )
                 )
                 # verify signature to check that data hasn't been changed
-                hash: bytes = compute_hash(device_id, location, timestamp)
+                hash: bytes = compute_hash(device_id, location, timestamp, destruct)
 
                 if not self.keys.verify(location, hash, bytes.fromhex(signature)):
                     return ResponseQuery(

@@ -3,13 +3,14 @@ The following transaction types exist:
 
     BLOCK:
         This transaction type records the transfer of an item to a new place and has the following format:
-        BLOCK=DEVICE-ID=LOCATION=TIMESTAMP=SIGNED-DIGEST
+        BLOCK=DEVICE-ID=LOCATION=TIMESTAMP=DESTRUCT=SIGNED-DIGEST
 
         Explanation of attributes:
         BLOCK:                  identifier that this transaction is of the type BLOCK
         DEVICE-ID:              device id
         LOCATION:               name of the site that the item was received
         TIMESTAMP:              timestamp with the format specified in DATETIME_FORMAT
+        DESTRUCT:               bool if the item is to be destroyed at that site
         SIGNED-DIGEST:          The signed hash of the data
 
     ALLOCATE:
@@ -53,11 +54,14 @@ BYTE_ENCODING = "UTF-8"
 DATETIME_FORMAT = "%y%m%d%H%M%S%f"
 
 
-def compute_hash(device_id: int, location: str, timestamp: datetime) -> bytes:
+def compute_hash(
+    device_id: int, location: str, timestamp: datetime, destruct: bool
+) -> bytes:
     hasher = sha256()
     hasher.update(bytes(str(device_id), BYTE_ENCODING))
     hasher.update(bytes(location, BYTE_ENCODING))
     hasher.update(bytes(timestamp.strftime(DATETIME_FORMAT), BYTE_ENCODING))
+    hasher.update(bytes(str(destruct), BYTE_ENCODING))
     return hasher.digest()
 
 
@@ -91,7 +95,7 @@ def allocate_device_id(location: str) -> Tuple[bool, int]:
 
 
 def send_device_location(
-    device_id: int, location: str, signing_key: SigningKey
+    device_id: int, location: str, signing_key: SigningKey, destruct: bool
 ) -> Tuple[bool, str]:
     """
     Send a transaction to the Tendermint network to add a new location for a device with the current time
@@ -103,11 +107,12 @@ def send_device_location(
     """
     try:
         now: datetime = datetime.now()
-        transaction_string = "BLOCK={}={}={}={}".format(
+        transaction_string = "BLOCK={}={}={}={}={}".format(
             device_id,
             location,
             now.strftime(DATETIME_FORMAT),
-            signing_key.sign(compute_hash(device_id, location, now)).hex(),
+            destruct,
+            signing_key.sign(compute_hash(device_id, location, now, destruct)).hex(),
         )
         response = requests.get(
             'http://localhost:26657/broadcast_tx_commit?tx="{}"'.format(
@@ -168,7 +173,7 @@ def query_device_information(
 
         info/log about the result
 
-        List of Tuples that store the locations + timestamps that the device was at in order
+        List of Tuples that store the locations + timestamps that the device was at in chronological order
     """
     try:
         response = requests.get(

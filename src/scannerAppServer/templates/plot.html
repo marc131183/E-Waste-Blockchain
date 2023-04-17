@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <title>Flask Leaflet Website</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/universal.css') }}" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css"
+        integrity="sha512-xodZBNTC5n17Xt2atTPuE1HxjVMSvLVW9ocqUKLsCC5CXdbqCmblAshOMAS6/keqq/sMZMZ19scR4PsZChSR7A=="
+        crossorigin="" />
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"
+        integrity="sha512-XQoYMqMTK8LvdxXYG3nZ448hOEQiglfqkJs1NOQV44cWnUrBc8PkAOcXy20w0vlaXaVUearIOBhiXZ5V3ynxwA=="
+        crossorigin=""></script>
+</head>
+
+<body>
+    <div id="input-box">
+        <form action="{{ url_for('plot') }}" method="POST">
+            <input type="text" name="input_value" placeholder="Enter device-id">
+            <input type="submit" value="Submit">
+        </form>
+    </div>
+    <div id="map"></div>
+    <script>
+        var map = L.map('map');
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(map);
+
+        map.setView({ lat: 65, lng: 20 }, 5);
+
+        // Define an array to store the latitudes and longitudes of each marker
+        var latlngs = [];
+
+        {% for marker in markers %}
+        // Add the latitude and longitude of each marker to the latlngs array
+        latlngs.push([{{ marker['lat'] }}, {{ marker['lon'] }}]);
+        {% endfor %}
+
+        // Create a Polyline object using the latlngs array and add it to the map
+        var polyline = L.polyline(latlngs, { color: 'red' }).addTo(map);
+
+        {% for marker in markers %}
+        L.marker([{{ marker['lat'] }}, {{ marker['lon'] }}]).addTo(map)
+            .bindPopup("{{ marker['popup'] }}");
+        // .openPopup();
+        {% endfor %}
+
+    </script>
+</body>
+
+</html>
