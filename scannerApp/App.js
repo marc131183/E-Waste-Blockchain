@@ -1,11 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Text, View, StyleSheet, Button } from 'react-native';
+import { Text, View, StyleSheet, Button, Alert } from 'react-native';
 import { BarCodeScanner } from 'expo-barcode-scanner';
 
 
+
 export default function App() {
-  const targetIP = '192.168.0.153';
-  const targetPort = 10000;
   const [hasPermission, setHasPermission] = useState(null);
   const [scanned, setScanned] = useState(false);
 
@@ -18,21 +17,37 @@ export default function App() {
     getBarCodeScannerPermissions();
   }, []);
 
-  const handleBarCodeScanned = ({ type, data }) => {
+  const showConfirmationAlert = async (title, message) => {
+    return new Promise((resolve, reject) => {
+      Alert.alert(
+        title,
+        message,
+        [
+          { text: 'Yes', onPress: () => resolve(true) },
+          { text: 'No', onPress: () => resolve(false) },
+        ],
+        { cancelable: false }
+      );
+    });
+  };
+
+  const handleBarCodeScanned = async ({ type, data }) => {
     setScanned(true);
-    
+
+    const confirmed = await showConfirmationAlert('Confirm', 'Will the device be destroyed here?');
+
     fetch('http://192.168.0.153:3000/message', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ message: 'BITTTE!' })
+      body: JSON.stringify({ message: data + "=" + confirmed })
     })
-    .then(response => response.text())
-    .then(text => alert(text))
-    .catch(error => console.error(error));
+      .then(response => response.text())
+      .then(text => alert(text))
+      .catch(error => console.error(error));
 
-    alert(`Bar code with type ${type} and data ${data} has been scanned!`);
+    // alert(`Bar code with type ${type} and data ${data} has been scanned!`);
   };
 
   if (hasPermission === null) {

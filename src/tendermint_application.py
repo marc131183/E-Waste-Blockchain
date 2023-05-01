@@ -48,7 +48,7 @@ class WasteTracker(BaseApplication):
             if not self.keys.verify(location, hash, signature):
                 return ResponseCheckTx(code=ErrorCode, log="signature incorrect")
 
-            # verify that the location has a destruction certificate, if the item is to ordered to be destroyed there
+            # verify that the location has a destruction certificate, if the item ordered to be destroyed there
             if destruct:
                 if not self.keys.has_destruct_certificate(location):
                     return ResponseCheckTx(
